@@ -1,7 +1,13 @@
 package com.accenture.springai_bootcamp_demo.client;
 
+import com.accenture.springai_bootcamp_demo.config.OpenRouterProperties;
 import com.accenture.springai_bootcamp_demo.entity.ChatMessage;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -15,7 +21,13 @@ import java.util.List;
 @Slf4j
 @Component
 public class OpenRouterClient {
-    //TODO 4: define and initialize a ChatClient
+    private final ChatClient chatClient;
+
+    public OpenRouterClient(ChatClient.Builder chatClientBuilder, OpenRouterProperties properties) {
+        this.chatClient = chatClientBuilder
+                .defaultSystem(properties.systemPrompt())
+                .build();
+    }
 
     public String complete(List<ChatMessage> history) {
         String reply = call(history);
@@ -25,7 +37,10 @@ public class OpenRouterClient {
 
     private String call(List<ChatMessage> history) {
         try {
-            //TODO 5: make a call through ChatClient with the conversation history (including latest user message)
+            return chatClient.prompt()
+                    .messages(history.stream().map(OpenRouterClient::toPromptMessage).toList())
+                    .call()
+                    .content();
         } catch (OpenRouterException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -34,7 +49,13 @@ public class OpenRouterClient {
         }
     }
 
-    //TODO 6: use helper methods/mappers/utility classes to construct the payload for a cleaner solution
+    private static Message toPromptMessage(ChatMessage chatMessage) {
+        return switch (chatMessage.getRole()) {
+            case SYSTEM -> new SystemMessage(chatMessage.getContent());
+            case USER -> new UserMessage(chatMessage.getContent());
+            case ASSISTANT -> new AssistantMessage(chatMessage.getContent());
+        };
+    }
 
     private String extractContent(String content) {
         if (!StringUtils.hasText(content)) {
