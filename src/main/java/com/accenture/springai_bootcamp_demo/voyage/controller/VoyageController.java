@@ -1,9 +1,11 @@
 package com.accenture.springai_bootcamp_demo.voyage.controller;
 
 import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipEventRequest;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipUpdateDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.VoyageDto;
+import com.accenture.springai_bootcamp_demo.voyage.service.MemoryService;
 import com.accenture.springai_bootcamp_demo.voyage.service.ShipSimulation;
 import com.accenture.springai_bootcamp_demo.voyage.service.VoyageService;
 import jakarta.validation.Valid;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -28,6 +31,7 @@ public class VoyageController {
 
     private final VoyageService voyageService;
     private final ShipSimulation shipSimulation;
+    private final MemoryService memoryService;
 
     @PostMapping
     public ResponseEntity<VoyageDto> create() {
@@ -54,5 +58,14 @@ public class VoyageController {
     @GetMapping("/{voyageId}/log")
     public List<LogEntryDto> log(@PathVariable String voyageId) {
         return voyageService.getLog(voyageId);
+    }
+
+    // Without a query: everything they remember, newest first. With one: what they would recall, best first
+    @GetMapping("/{voyageId}/crew/{crewMemberId}/memories")
+    public List<MemoryDto> memories(@PathVariable String voyageId,
+                                    @PathVariable Long crewMemberId,
+                                    @RequestParam(required = false) String query,
+                                    @RequestParam(defaultValue = "5") int limit) {
+        return memoryService.getMemories(voyageId, crewMemberId, query, limit);
     }
 }

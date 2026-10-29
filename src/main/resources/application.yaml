@@ -19,3 +19,5 @@ spring:
       chat:
         # chat.options.model is deprecated for removal since Spring AI 2.0.0, replaced by chat.model
         model: ${OLLAMA_MODEL:llama3.2}
+      embedding:
+        model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}

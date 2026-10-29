@@ -2,6 +2,7 @@ package com.accenture.springai_bootcamp_demo.config;
 
 import com.accenture.springai_bootcamp_demo.client.OpenRouterException;
 import com.accenture.springai_bootcamp_demo.service.ChatNotFoundException;
+import com.accenture.springai_bootcamp_demo.voyage.service.CrewMemberNotFoundException;
 import com.accenture.springai_bootcamp_demo.voyage.service.VoyageNotFoundException;
 import com.accenture.springai_bootcamp_demo.voyage.service.VoyageStateException;
 import java.util.stream.Collectors;
@@ -24,6 +25,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(VoyageNotFoundException.class)
     public ProblemDetail handleVoyageNotFound(VoyageNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(CrewMemberNotFoundException.class)
+    public ProblemDetail handleCrewMemberNotFound(CrewMemberNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
