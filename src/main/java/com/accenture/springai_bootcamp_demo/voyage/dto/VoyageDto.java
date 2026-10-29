@@ -10,6 +10,7 @@ public record VoyageDto(
         int power,
         int hull,
         int food,
+        boolean lost,
         Instant createdAt,
         List<CrewMemberDto> crew) {
 }

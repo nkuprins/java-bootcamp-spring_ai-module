@@ -26,6 +26,18 @@ public class Voyage {
     private static final int STARTING_HULL = 95;
     private static final int STARTING_FOOD = 70;
 
+    private static final int MIN_LEVEL = 0;
+    private static final int MAX_LEVEL = 100;
+
+    // Breathing uses oxygen every turn; a damaged hull leaks it and weak power starves the scrubbers
+    private static final int OXYGEN_USE_PER_TURN = 2;
+    private static final int LEAK_BELOW_HULL = 50;
+    private static final int LEAK_OXYGEN_LOSS = 3;
+    private static final int WEAK_SCRUBBERS_BELOW_POWER = 30;
+    private static final int WEAK_SCRUBBERS_OXYGEN_LOSS = 2;
+    private static final int FOOD_USE_PER_TURN = 1;
+    private static final int POWER_USE_PER_TURN = 1;
+
     // UUID kept as String: SQLite has no uuid type
     // Long ids appear in URLs, so they don't suit
     @Id
@@ -68,5 +80,36 @@ public class Voyage {
     public void addCrewMember(CrewMember crewMember) {
         crewMember.setVoyage(this);
         this.crew.add(crewMember);
+    }
+
+    public void advanceTurn() {
+        turn++;
+        int oxygenLoss = OXYGEN_USE_PER_TURN;
+        if (hull < LEAK_BELOW_HULL) {
+            oxygenLoss += LEAK_OXYGEN_LOSS;
+        }
+        if (power < WEAK_SCRUBBERS_BELOW_POWER) {
+            oxygenLoss += WEAK_SCRUBBERS_OXYGEN_LOSS;
+        }
+        adjust(ShipSystem.OXYGEN, -oxygenLoss);
+        adjust(ShipSystem.FOOD, -FOOD_USE_PER_TURN);
+        adjust(ShipSystem.POWER, -POWER_USE_PER_TURN);
+    }
+
+    public void adjust(ShipSystem system, int delta) {
+        switch (system) {
+            case OXYGEN -> oxygen = clampLevel(oxygen + delta);
+            case POWER -> power = clampLevel(power + delta);
+            case HULL -> hull = clampLevel(hull + delta);
+            case FOOD -> food = clampLevel(food + delta);
+        }
+    }
+
+    public boolean isLost() {
+        return oxygen == MIN_LEVEL;
+    }
+
+    private static int clampLevel(int level) {
+        return Math.clamp(level, MIN_LEVEL, MAX_LEVEL);
     }
 }
