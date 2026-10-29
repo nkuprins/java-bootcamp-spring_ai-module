@@ -21,3 +21,13 @@ spring:
         model: ${OLLAMA_MODEL:llama3.2}
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+    mcp:
+      server:
+        name: long-voyage-mission-control
+        version: 1.0.0
+        # Must be set even though the metadata says it is the default: in Spring AI 2.0.2 the /mcp endpoint
+        # is only registered for an explicit STREAMABLE, otherwise the deprecated SSE transport is used
+        protocol: STREAMABLE
+        instructions: >
+          You are Mission Control for the generation ship Long Voyage. Start a voyage or use an existing
+          voyage id, watch the ship, trigger events, send delayed transmissions and interview the crew.

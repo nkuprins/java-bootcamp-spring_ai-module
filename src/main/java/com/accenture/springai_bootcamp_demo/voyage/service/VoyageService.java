@@ -28,9 +28,9 @@ public class VoyageService {
         Voyage voyage = Voyage.create();
         voyageProperties.crew().forEach(profile -> voyage.addCrewMember(
                 CrewMember.of(profile.name(), profile.role(), profile.persona(), profile.location())));
-        voyageRepository.save(voyage);
-        log.info("Launched voyage {} with {} crew", voyage.getId(), voyage.getCrew().size());
-        return voyageMapper.toDto(voyage);
+        Voyage saved = voyageRepository.save(voyage);
+        log.info("Launched voyage {} with {} crew", saved.getId(), saved.getCrew().size());
+        return voyageMapper.toDto(saved);
     }
 
     @Transactional(readOnly = true)
