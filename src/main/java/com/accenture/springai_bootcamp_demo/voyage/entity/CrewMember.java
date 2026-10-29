@@ -44,6 +44,11 @@ public class CrewMember {
     @Column(nullable = false)
     private Location location;
 
+    // Null until they first speak
+    // lets the tools refuse word-for-word repeats
+    @Column(length = 300)
+    private String lastWords;
+
     public static CrewMember of(String name, String role, String persona, Location location) {
         CrewMember crewMember = new CrewMember();
         crewMember.name = name;

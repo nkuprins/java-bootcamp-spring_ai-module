@@ -1,5 +1,7 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
+import com.accenture.springai_bootcamp_demo.voyage.dto.CrewMemberDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipUpdateDto;
 import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Location;
@@ -17,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,9 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Changes the ship: runs turns and applies events. Transactions are opened by
  * hand with {@link TransactionTemplate} so the busy guard wraps the commit, and
- * so model calls (embeddings now, crew decisions later) run between short
- * transactions instead of inside one long one (SQLite allows only one writer
- * at a time).
+ * so model calls (crew decisions, embeddings) run between short transactions
+ * instead of inside one long one (SQLite allows only one writer at a time).
  */
 @Slf4j
 @Service
@@ -36,6 +38,7 @@ public class ShipSimulation {
     private final VoyageRepository voyageRepository;
     private final LogEntryRepository logEntryRepository;
     private final MemoryService memoryService;
+    private final CrewAgent crewAgent;
     private final VoyageMapper voyageMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -46,25 +49,37 @@ public class ShipSimulation {
     }
 
     public ShipUpdateDto runTurn(String voyageId) {
-        return changeShip(voyageId, voyage -> {
-            voyage.advanceTurn();
-
-            List<LogEntry> entries = new ArrayList<>();
-            entries.add(LogEntry.of(voyage, LogKind.STATUS, statusReport(voyage)));
-            if (voyage.isLost()) {
-                entries.add(LogEntry.of(voyage, LogKind.STATUS, "Oxygen is gone. The Long Voyage is lost."));
-                log.info("Voyage {} lost on turn {}", voyageId, voyage.getTurn());
+        return whileBusy(voyageId, () -> {
+            ShipUpdateDto update = applyChange(voyageId, this::advanceTurn);
+            if (update.voyage().lost()) {
+                return update;
             }
-            List<MemoryDraft> memories = voyage.getCrew().stream()
-                    .flatMap(member -> routineMemory(voyage, member).stream())
-                    .toList();
-            return new Outcome(saveUpdate(voyage, entries), memories);
+            List<LogEntryDto> entries = new ArrayList<>(update.entries());
+
+            // Crew act one after another, so each sees what the people before them did
+            for (CrewMemberDto member : update.voyage().crew()) {
+                CrewSituation situation = transactionTemplate.execute(status -> {
+                    Voyage voyage = loadActiveVoyage(voyageId);
+                    return CrewSituation.of(voyage, crewMember(voyage, member.id()));
+                });
+                // The slow model call happens here, with no transaction open
+                Optional<CrewAction> action = crewAgent.decide(situation);
+                update = applyChange(voyageId, voyage -> {
+                    CrewMember actor = crewMember(voyage, member.id());
+                    return action.map(chosen -> CrewActionEffects.apply(voyage, actor, chosen))
+                            .orElseGet(() -> CrewActionEffects.hesitate(voyage, actor));
+                });
+                entries.addAll(update.entries());
+            }
+
+            update = applyChange(voyageId, voyage -> new ShipChange(List.of(), routineMemories(voyage)));
+            return new ShipUpdateDto(update.voyage(), entries);
         });
     }
 
     public ShipUpdateDto triggerEvent(String voyageId, ShipEvent event, Location location) {
         Location where = location != null ? location : event.defaultLocation();
-        return changeShip(voyageId, voyage -> {
+        return whileBusy(voyageId, () -> applyChange(voyageId, voyage -> {
             voyage.adjust(event.system(), event.impact());
 
             String text = "%s in %s: %s %+d".formatted(
@@ -72,27 +87,43 @@ public class ShipSimulation {
             List<MemoryDraft> memories = voyage.getCrew().stream()
                     .map(member -> eventMemory(voyage, member, event, where))
                     .toList();
-            return new Outcome(saveUpdate(voyage, List.of(LogEntry.of(voyage, LogKind.EVENT, text))), memories);
-        });
+            return new ShipChange(List.of(LogEntry.of(voyage, LogKind.EVENT, text)), memories);
+        }));
     }
 
-    // Order matters: mark busy -> change the ship and commit -> embed and save memories -> mark free
-    private ShipUpdateDto changeShip(String voyageId, Function<Voyage, Outcome> change) {
+    private ShipChange advanceTurn(Voyage voyage) {
+        voyage.advanceTurn();
+        List<LogEntry> entries = new ArrayList<>();
+        entries.add(LogEntry.of(voyage, LogKind.STATUS, statusReport(voyage)));
+        if (voyage.isLost()) {
+            entries.add(LogEntry.of(voyage, LogKind.STATUS, "Oxygen is gone. The Long Voyage is lost."));
+            log.info("Voyage {} lost on turn {}", voyage.getId(), voyage.getTurn());
+        }
+        return new ShipChange(entries, List.of());
+    }
+
+    private <T> T whileBusy(String voyageId, Supplier<T> work) {
         if (!busyVoyages.add(voyageId)) {
             throw new VoyageStateException("Voyage " + voyageId + " is busy with another turn or event");
         }
         try {
-            Outcome outcome = transactionTemplate.execute(status -> change.apply(loadActiveVoyage(voyageId)));
-            memoryService.recordAll(outcome.memories());
-            return outcome.update();
+            return work.get();
         } finally {
             busyVoyages.remove(voyageId);
         }
     }
 
-    private ShipUpdateDto saveUpdate(Voyage voyage, List<LogEntry> entries) {
-        logEntryRepository.saveAll(entries);
-        return new ShipUpdateDto(voyageMapper.toDto(voyage), voyageMapper.toLogDtos(entries));
+    // One short transaction per change; its memories are embedded and saved after it commits
+    private ShipUpdateDto applyChange(String voyageId, Function<Voyage, ShipChange> change) {
+        Outcome outcome = transactionTemplate.execute(status -> {
+            Voyage voyage = loadActiveVoyage(voyageId);
+            ShipChange shipChange = change.apply(voyage);
+            logEntryRepository.saveAll(shipChange.entries());
+            ShipUpdateDto update = new ShipUpdateDto(voyageMapper.toDto(voyage), voyageMapper.toLogDtos(shipChange.entries()));
+            return new Outcome(update, shipChange.memories());
+        });
+        memoryService.recordAll(outcome.memories());
+        return outcome.update();
     }
 
     private Voyage loadActiveVoyage(String voyageId) {
@@ -102,6 +133,19 @@ public class ShipSimulation {
             throw new VoyageStateException("Voyage " + voyageId + " is lost");
         }
         return voyage;
+    }
+
+    private static CrewMember crewMember(Voyage voyage, Long crewMemberId) {
+        return voyage.getCrew().stream()
+                .filter(member -> member.getId().equals(crewMemberId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static List<MemoryDraft> routineMemories(Voyage voyage) {
+        return voyage.getCrew().stream()
+                .flatMap(member -> routineMemory(voyage, member).stream())
+                .toList();
     }
 
     // An hour alone is not worth remembering, and hundreds of such lines would crowd out real memories
@@ -130,7 +174,6 @@ public class ShipSimulation {
     }
 
     private static String statusReport(Voyage voyage) {
-        return "Turn %d: oxygen %d, power %d, hull %d, food %d".formatted(
-                voyage.getTurn(), voyage.getOxygen(), voyage.getPower(), voyage.getHull(), voyage.getFood());
+        return "Turn %d: %s".formatted(voyage.getTurn(), voyage.status().summary());
     }
 }

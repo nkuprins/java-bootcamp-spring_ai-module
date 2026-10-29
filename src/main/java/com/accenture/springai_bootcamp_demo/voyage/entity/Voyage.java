@@ -27,7 +27,7 @@ public class Voyage {
     private static final int STARTING_FOOD = 70;
 
     private static final int MIN_LEVEL = 0;
-    private static final int MAX_LEVEL = 100;
+    public static final int MAX_LEVEL = 100;
 
     // Breathing uses oxygen every turn; a damaged hull leaks it and weak power starves the scrubbers
     private static final int OXYGEN_USE_PER_TURN = 2;
@@ -37,6 +37,7 @@ public class Voyage {
     private static final int WEAK_SCRUBBERS_OXYGEN_LOSS = 2;
     private static final int FOOD_USE_PER_TURN = 1;
     private static final int POWER_USE_PER_TURN = 1;
+    public static final int REPAIR_AMOUNT = 5;
 
     // UUID kept as String: SQLite has no uuid type
     // Long ids appear in URLs, so they don't suit
@@ -96,6 +97,10 @@ public class Voyage {
         adjust(ShipSystem.POWER, -POWER_USE_PER_TURN);
     }
 
+    public void repair(ShipSystem system) {
+        adjust(system, REPAIR_AMOUNT);
+    }
+
     public void adjust(ShipSystem system, int delta) {
         switch (system) {
             case OXYGEN -> oxygen = clampLevel(oxygen + delta);
@@ -107,6 +112,10 @@ public class Voyage {
 
     public boolean isLost() {
         return oxygen == MIN_LEVEL;
+    }
+
+    public ShipStatus status() {
+        return new ShipStatus(oxygen, power, hull, food);
     }
 
     private static int clampLevel(int level) {
