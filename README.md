@@ -18,13 +18,15 @@ Everything runs locally: Ollama for the models, SQLite for the data.
     <td width="25%"><img src="docs/screenshots/phone.png" alt="Dashboard on a phone"></td>
   </tr>
   <tr>
-    <td>A private interview. Juno heard about the dead planet from Lev in hour 11, yet tells Mission Control nobody ever told her anything, and calls it "something my mom would say if she really was hiding something from us".</td>
+    <td>A private interview. Juno heard about the dead planet from Lev in hour 11, yet tells Mission Control nobody ever told her anything, and calls it "something my mom would say if she really was hiding something from us" (see below).</td>
     <td>The ship's log: the comms officer shares the message, and a crop blight happens between two hours.</td>
     <td>The same dashboard on a phone.</td>
   </tr>
 </table>
 
 Taken after letting a voyage run for 20 hours with a hull breach, a crop blight and two transmissions from Earth. Click an image to see it full size.
+
+**Why Juno answers like this.** Her answer is built from her own memories, and the question itself decides which ones come to mind. Her prompt contained Lev's words from hour 11 ("I am deeply concerned about the message from Earth: 'The destination planet is dead…'"), her own conclusions from earlier hours, such as "I don't trust Captain Varga's reassurances about the hull breach" (hour 8), and her persona, which says she hates being kept in the dark. So she knows the phrase, but only as Lev's worried remark, never as an answer from the adults, and after 16 hours of distrusting the captain she treats it as part of what is being hidden. Her "mom" is invented by the model, and saying "we've never been told anything" while quoting Lev is the small model contradicting itself.
 
 ## How it covers the assignment
 
