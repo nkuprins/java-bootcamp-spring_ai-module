@@ -12,6 +12,7 @@ public enum MemoryKind {
     ALARM(4),
     CONVERSATION(5),
     ANNOUNCEMENT(6),
+    INTERVIEW(6),
     REFLECTION(7),
     WITNESSED(8),
     EARTH_MESSAGE(9);

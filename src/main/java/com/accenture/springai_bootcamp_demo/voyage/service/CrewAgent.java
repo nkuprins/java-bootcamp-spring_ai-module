@@ -1,12 +1,6 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
-import com.accenture.springai_bootcamp_demo.voyage.entity.Memory;
-import com.accenture.springai_bootcamp_demo.voyage.entity.MemoryKind;
-import com.accenture.springai_bootcamp_demo.voyage.service.MemoryRanking.ScoredMemory;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
@@ -19,9 +13,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 class CrewAgent {
-
-    private static final int MEMORIES_IN_PROMPT = 5;
-    private static final int WEIGHING_IN_PROMPT = 2;
 
     private static final String RULES = """
             You live aboard the generation ship Long Voyage, decades away from any planet.
@@ -92,38 +83,12 @@ class CrewAgent {
     }
 
     private String describe(CrewSituation situation) {
-        String company = situation.isAlone()
-                ? "You are alone."
-                : "With you: " + String.join(", ", situation.companions()) + ".";
         String lastWords = situation.lastWords() == null
                 ? ""
                 : "The last thing you said was: \"" + situation.lastWords() + "\"";
-        return SITUATION.formatted(situation.turn(), situation.location().label(), company, lastWords,
-                situation.ship().summary(), memories(situation, company));
-    }
-
-    private String memories(CrewSituation situation, String company) {
-        List<Memory> weighing = memoryService.weighingOnMind(situation.who().id(), situation.turn(), WEIGHING_IN_PROMPT);
-        Set<Long> alreadyShown = weighing.stream().map(Memory::getId).collect(Collectors.toSet());
-
-        // Their own words are left out: the prompt shows their last words, and older ones only invite parroting
-        String now = "In %s. %s Ship: %s.".formatted(situation.location().label(), company, situation.ship().summary());
-        List<Memory> recalled = memoryService.recall(situation.who().id(), now, situation.turn(), MEMORIES_IN_PROMPT * 2)
-                .stream()
-                .map(ScoredMemory::memory)
-                .filter(memory -> memory.getKind() != MemoryKind.SPOKE && !alreadyShown.contains(memory.getId()))
-                .limit(MEMORIES_IN_PROMPT)
-                .toList();
-
-        StringBuilder text = new StringBuilder();
-        if (!weighing.isEmpty()) {
-            text.append("Weighing on your mind:\n").append(bullets(weighing)).append("\n\n");
-        }
-        text.append("What comes to mind:\n").append(recalled.isEmpty() ? "Nothing in particular." : bullets(recalled));
-        return text.toString();
-    }
-
-    private static String bullets(List<Memory> memories) {
-        return memories.stream().map(memory -> "- " + memory.getContent()).collect(Collectors.joining("\n"));
+        String now = "In %s. %s Ship: %s.".formatted(
+                situation.location().label(), situation.company(), situation.ship().summary());
+        return SITUATION.formatted(situation.turn(), situation.location().label(), situation.company(), lastWords,
+                situation.ship().summary(), memoryService.describeMind(situation.who().id(), now, situation.turn()));
     }
 }

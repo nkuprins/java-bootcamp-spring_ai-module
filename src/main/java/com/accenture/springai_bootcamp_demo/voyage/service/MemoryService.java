@@ -4,6 +4,7 @@ import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryScoreDto;
 import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Memory;
+import com.accenture.springai_bootcamp_demo.voyage.entity.MemoryKind;
 import com.accenture.springai_bootcamp_demo.voyage.mapper.VoyageMapper;
 import com.accenture.springai_bootcamp_demo.voyage.repository.CrewMemberRepository;
 import com.accenture.springai_bootcamp_demo.voyage.repository.MemoryRepository;
@@ -11,6 +12,8 @@ import com.accenture.springai_bootcamp_demo.voyage.service.MemoryRanking.ScoredM
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,8 @@ public class MemoryService {
     // Reflections, things seen first-hand and Earth messages; they fade from the mind after half a day
     private static final int WEIGHTY_IMPORTANCE = 7;
     private static final int WEIGHTY_FOR_TURNS = 12;
+    private static final int WEIGHING_IN_PROMPT = 2;
+    private static final int MEMORIES_IN_PROMPT = 5;
 
     private final MemoryRepository memoryRepository;
     private final CrewMemberRepository crewMemberRepository;
@@ -52,16 +57,42 @@ public class MemoryService {
         });
     }
 
+    /**
+     * What a crew member has in mind in a situation, as prompt text: their weightiest recent memories,
+     * then the ones that fit the situation. Their own words are left out of the second part, because
+     * replaying them only invites parroting.
+     */
+    String describeMind(Long crewMemberId, String situation, int currentTurn) {
+        List<Memory> weighing = weighingOnMind(crewMemberId, currentTurn);
+        Set<Long> alreadyShown = weighing.stream().map(Memory::getId).collect(Collectors.toSet());
+        List<Memory> recalled = recall(crewMemberId, situation, currentTurn, MEMORIES_IN_PROMPT * 2).stream()
+                .map(ScoredMemory::memory)
+                .filter(memory -> memory.getKind() != MemoryKind.SPOKE && !alreadyShown.contains(memory.getId()))
+                .limit(MEMORIES_IN_PROMPT)
+                .toList();
+
+        StringBuilder text = new StringBuilder();
+        if (!weighing.isEmpty()) {
+            text.append("Weighing on your mind:\n").append(bullets(weighing)).append("\n\n");
+        }
+        text.append("What comes to mind:\n").append(recalled.isEmpty() ? "Nothing in particular." : bullets(recalled));
+        return text.toString();
+    }
+
     // Big news stays on someone's mind wherever they are, however little it has to do with the room or the ship
-    List<Memory> weighingOnMind(Long crewMemberId, int currentTurn, int limit) {
+    private List<Memory> weighingOnMind(Long crewMemberId, int currentTurn) {
         return memoryRepository.findByCrewMemberId(crewMemberId).stream()
                 .filter(memory -> memory.getKind().importance() >= WEIGHTY_IMPORTANCE)
                 .filter(memory -> currentTurn - memory.getTurn() <= WEIGHTY_FOR_TURNS)
                 .sorted(Comparator.comparingInt((Memory memory) -> memory.getKind().importance())
                         .thenComparingInt(Memory::getTurn)
                         .reversed())
-                .limit(limit)
+                .limit(WEIGHING_IN_PROMPT)
                 .toList();
+    }
+
+    private static String bullets(List<Memory> memories) {
+        return memories.stream().map(memory -> "- " + memory.getContent()).collect(Collectors.joining("\n"));
     }
 
     List<ScoredMemory> recall(Long crewMemberId, String situation, int currentTurn, int limit) {

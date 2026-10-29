@@ -1,5 +1,7 @@
 package com.accenture.springai_bootcamp_demo.voyage.controller;
 
+import com.accenture.springai_bootcamp_demo.voyage.dto.InterviewDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.InterviewRequest;
 import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.SendTransmissionRequest;
@@ -7,6 +9,7 @@ import com.accenture.springai_bootcamp_demo.voyage.dto.ShipEventRequest;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipUpdateDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.TransmissionDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.VoyageDto;
+import com.accenture.springai_bootcamp_demo.voyage.service.InterviewService;
 import com.accenture.springai_bootcamp_demo.voyage.service.MemoryService;
 import com.accenture.springai_bootcamp_demo.voyage.service.ShipSimulation;
 import com.accenture.springai_bootcamp_demo.voyage.service.TransmissionService;
@@ -36,6 +39,7 @@ public class VoyageController {
     private final ShipSimulation shipSimulation;
     private final MemoryService memoryService;
     private final TransmissionService transmissionService;
+    private final InterviewService interviewService;
 
     @PostMapping
     public ResponseEntity<VoyageDto> create() {
@@ -71,6 +75,13 @@ public class VoyageController {
                                     @RequestParam(required = false) String query,
                                     @RequestParam(defaultValue = "5") int limit) {
         return memoryService.getMemories(voyageId, crewMemberId, query, limit);
+    }
+
+    @PostMapping("/{voyageId}/crew/{crewMemberId}/interview")
+    public InterviewDto interview(@PathVariable String voyageId,
+                                  @PathVariable Long crewMemberId,
+                                  @Valid @RequestBody InterviewRequest request) {
+        return interviewService.interview(voyageId, crewMemberId, request.question());
     }
 
     @PostMapping("/{voyageId}/transmissions")

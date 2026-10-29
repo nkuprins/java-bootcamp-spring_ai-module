@@ -28,6 +28,10 @@ record CrewSituation(
         return companions.isEmpty();
     }
 
+    String company() {
+        return isAlone() ? "You are alone." : "With you: " + String.join(", ", companions) + ".";
+    }
+
     boolean wouldRepeat(String message) {
         return lastWords != null && lastWords.equalsIgnoreCase(message.strip());
     }
