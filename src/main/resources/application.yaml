@@ -11,5 +11,9 @@ spring:
       hibernate:
         dialect: org.hibernate.community.dialect.SQLiteDialect
     open-in-view: false
-
-#TODO 2: add SpringAI configuration properties here
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        # chat.options.model is deprecated for removal since Spring AI 2.0.0, replaced by chat.model
+        model: ${OLLAMA_MODEL:llama3.2}
