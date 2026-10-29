@@ -9,4 +9,6 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
     List<Memory> findByCrewMemberId(Long crewMemberId);
 
     List<Memory> findByCrewMemberIdOrderByIdDesc(Long crewMemberId);
+
+    List<Memory> findTop12ByCrewMemberIdOrderByIdDesc(Long crewMemberId);
 }

@@ -174,7 +174,7 @@ class CrewTools {
     }
 
     private static String shorten(String message) {
-        String trimmed = message.strip();
+        String trimmed = message.replaceAll("\\s+", " ").strip();
         return trimmed.length() <= MAX_MESSAGE_LENGTH ? trimmed : trimmed.substring(0, MAX_MESSAGE_LENGTH);
     }
 

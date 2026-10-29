@@ -11,6 +11,7 @@ public enum MemoryKind {
     ALARM(4),
     CONVERSATION(5),
     ANNOUNCEMENT(6),
+    REFLECTION(7),
     WITNESSED(8);
 
     private final int importance;

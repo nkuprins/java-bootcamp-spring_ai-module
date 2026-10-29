@@ -3,6 +3,7 @@ package com.accenture.springai_bootcamp_demo.voyage.service;
 import com.accenture.springai_bootcamp_demo.voyage.dto.CrewMemberDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipUpdateDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.VoyageDto;
 import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Location;
 import com.accenture.springai_bootcamp_demo.voyage.entity.LogEntry;
@@ -39,8 +40,13 @@ public class ShipSimulation {
     private final LogEntryRepository logEntryRepository;
     private final MemoryService memoryService;
     private final CrewAgent crewAgent;
+    private final Reflector reflector;
+    private final Narrator narrator;
     private final VoyageMapper voyageMapper;
     private final TransactionTemplate transactionTemplate;
+
+    // Every 4th hour people step back and draw conclusions; more often would mostly repeat them
+    private static final int REFLECTION_INTERVAL = 4;
 
     // Turns and events change the same ship row, so only one may run per voyage at a time
     private final Set<String> busyVoyages = ConcurrentHashMap.newKeySet();
@@ -54,26 +60,22 @@ public class ShipSimulation {
             if (update.voyage().lost()) {
                 return update;
             }
+            int turn = update.voyage().turn();
+            List<Long> crewIds = update.voyage().crew().stream().map(CrewMemberDto::id).toList();
             List<LogEntryDto> entries = new ArrayList<>(update.entries());
 
             // Crew act one after another, so each sees what the people before them did
-            for (CrewMemberDto member : update.voyage().crew()) {
-                CrewSituation situation = transactionTemplate.execute(status -> {
-                    Voyage voyage = loadActiveVoyage(voyageId);
-                    return CrewSituation.of(voyage, crewMember(voyage, member.id()));
-                });
-                // The slow model call happens here, with no transaction open
-                Optional<CrewAction> action = crewAgent.decide(situation);
-                update = applyChange(voyageId, voyage -> {
-                    CrewMember actor = crewMember(voyage, member.id());
-                    return action.map(chosen -> CrewActionEffects.apply(voyage, actor, chosen))
-                            .orElseGet(() -> CrewActionEffects.hesitate(voyage, actor));
-                });
-                entries.addAll(update.entries());
+            for (Long crewMemberId : crewIds) {
+                entries.addAll(crewMemberActs(voyageId, crewMemberId));
             }
-
-            update = applyChange(voyageId, voyage -> new ShipChange(List.of(), routineMemories(voyage)));
-            return new ShipUpdateDto(update.voyage(), entries);
+            applyChange(voyageId, voyage -> new ShipChange(List.of(), routineMemories(voyage)));
+            if (turn % REFLECTION_INTERVAL == 0) {
+                for (Long crewMemberId : crewIds) {
+                    entries.addAll(crewMemberReflects(voyageId, crewMemberId));
+                }
+            }
+            entries.addAll(narrate(voyageId, turn, entries));
+            return new ShipUpdateDto(currentVoyage(voyageId), entries);
         });
     }
 
@@ -89,6 +91,47 @@ public class ShipSimulation {
                     .toList();
             return new ShipChange(List.of(LogEntry.of(voyage, LogKind.EVENT, text)), memories);
         }));
+    }
+
+    private List<LogEntryDto> crewMemberActs(String voyageId, Long crewMemberId) {
+        // The slow model call happens here, with no transaction open
+        Optional<CrewAction> action = crewAgent.decide(situationOf(voyageId, crewMemberId));
+        return applyChange(voyageId, voyage -> {
+            CrewMember actor = crewMember(voyage, crewMemberId);
+            return action.map(chosen -> CrewActionEffects.apply(voyage, actor, chosen))
+                    .orElseGet(() -> CrewActionEffects.hesitate(voyage, actor));
+        }).entries();
+    }
+
+    private List<LogEntryDto> crewMemberReflects(String voyageId, Long crewMemberId) {
+        List<String> insights = reflector.reflect(situationOf(voyageId, crewMemberId));
+        if (insights.isEmpty()) {
+            return List.of();
+        }
+        return applyChange(voyageId, voyage -> reflections(voyage, crewMember(voyage, crewMemberId), insights)).entries();
+    }
+
+    private List<LogEntryDto> narrate(String voyageId, int turn, List<LogEntryDto> entries) {
+        // Thoughts are private: the official log only knows what people did and what happened to the ship
+        List<String> happenings = entries.stream()
+                .filter(entry -> entry.kind() != LogKind.THOUGHT)
+                .map(LogEntryDto::text)
+                .toList();
+        return narrator.narrate(turn, happenings)
+                .map(text -> applyChange(voyageId, voyage ->
+                        new ShipChange(List.of(LogEntry.of(voyage, LogKind.NARRATION, text)), List.of())).entries())
+                .orElse(List.of());
+    }
+
+    private CrewSituation situationOf(String voyageId, Long crewMemberId) {
+        return transactionTemplate.execute(status -> {
+            Voyage voyage = loadActiveVoyage(voyageId);
+            return CrewSituation.of(voyage, crewMember(voyage, crewMemberId));
+        });
+    }
+
+    private VoyageDto currentVoyage(String voyageId) {
+        return transactionTemplate.execute(status -> voyageMapper.toDto(loadActiveVoyage(voyageId)));
     }
 
     private ShipChange advanceTurn(Voyage voyage) {
@@ -140,6 +183,16 @@ public class ShipSimulation {
                 .filter(member -> member.getId().equals(crewMemberId))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private static ShipChange reflections(Voyage voyage, CrewMember member, List<String> insights) {
+        List<LogEntry> entries = insights.stream()
+                .map(insight -> LogEntry.of(voyage, LogKind.THOUGHT, member.getName() + " thinks: " + insight))
+                .toList();
+        List<MemoryDraft> memories = insights.stream()
+                .map(insight -> new MemoryDraft(member.getId(), voyage.getTurn(), MemoryKind.REFLECTION, insight))
+                .toList();
+        return new ShipChange(entries, memories);
     }
 
     private static List<MemoryDraft> routineMemories(Voyage voyage) {
