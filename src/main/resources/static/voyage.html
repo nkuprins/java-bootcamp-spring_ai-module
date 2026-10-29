@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Long Voyage · Mission Control</title>
+    <link rel="stylesheet" href="/voyage.css">
+</head>
+<body>
+<header class="bridge">
+    <div class="nameplate">
+        <span id="lamp" class="lamp idle" aria-hidden="true"></span>
+        <div>
+            <h1>THE LONG VOYAGE</h1>
+            <span class="sub">MISSION CONTROL · EARTH</span>
+        </div>
+    </div>
+    <div class="clock">
+        <span class="label">SHIP TIME</span>
+        <span id="hour" class="value">HOUR --</span>
+    </div>
+    <div class="actions">
+        <button id="next-turn" disabled>Next hour</button>
+        <button id="auto" disabled>Auto ▶</button>
+        <button id="new-voyage" class="ghost">New voyage</button>
+    </div>
+</header>
+<div id="status-line" role="status" aria-live="polite"></div>
+
+<main class="deck">
+    <section class="panel systems" aria-labelledby="systems-title">
+        <h2 id="systems-title">◢ LIFE SUPPORT</h2>
+        <div id="gauges"></div>
+        <div id="lost-banner" class="lost-banner" hidden>OXYGEN DEPLETED · THE VOYAGE IS LOST</div>
+    </section>
+
+    <section class="panel crew" aria-labelledby="crew-title">
+        <h2 id="crew-title">◢ CREW</h2>
+        <div id="crew" class="crew-list"></div>
+    </section>
+
+    <section class="panel log" aria-labelledby="log-title">
+        <h2 id="log-title">◢ SHIP'S LOG</h2>
+        <div id="log" class="entries"></div>
+    </section>
+
+    <section class="panel control" aria-labelledby="control-title">
+        <h2 id="control-title">◢ MISSION CONTROL</h2>
+        <form id="event-form">
+            <label for="event-type">TRIGGER EVENT</label>
+            <div class="pair">
+                <select id="event-type">
+                    <option value="HULL_BREACH">Hull breach</option>
+                    <option value="POWER_FAILURE">Power failure</option>
+                    <option value="CROP_BLIGHT">Crop blight</option>
+                    <option value="STRANGE_SIGNAL">Strange signal</option>
+                </select>
+                <select id="event-location" aria-label="Room">
+                    <option value="">Usual room</option>
+                    <option value="BRIDGE">Bridge</option>
+                    <option value="ENGINEERING">Engineering</option>
+                    <option value="HYDROPONICS">Hydroponics</option>
+                    <option value="MEDBAY">Medbay</option>
+                    <option value="COMMS_ARRAY">Comms array</option>
+                    <option value="MESS_HALL">Mess hall</option>
+                    <option value="QUARTERS">Crew quarters</option>
+                </select>
+            </div>
+            <button type="submit" class="warn" disabled>Trigger</button>
+        </form>
+        <form id="transmission-form">
+            <label for="transmission-message">TRANSMIT TO SHIP</label>
+            <textarea id="transmission-message" rows="4" maxlength="500" placeholder="Your message to the ship…"></textarea>
+            <p class="note">Arrives in 4 hours. Only the communications officer reads it.</p>
+            <button type="submit" disabled>Send transmission</button>
+        </form>
+        <div id="transmissions"></div>
+        <a class="back" href="/">Back to chat</a>
+    </section>
+</main>
+
+<dialog id="interview">
+    <div class="head">
+        <h3 id="interview-title">PRIVATE CHANNEL</h3>
+        <button id="interview-close" class="ghost" type="button" aria-label="Close">Close</button>
+    </div>
+    <div class="body">
+        <p class="hint">Nobody else on board can hear this. They answer from what they know, and they will remember you asked.</p>
+        <div id="qa" class="qa"></div>
+        <form id="interview-form">
+            <textarea id="interview-question" rows="4" maxlength="500" placeholder="Ask a question…"></textarea>
+            <button type="submit">Ask</button>
+        </form>
+    </div>
+</dialog>
+
+<script src="/voyage.js"></script>
+</body>
+</html>
