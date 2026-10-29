@@ -5,5 +5,6 @@ public enum LogKind {
     EVENT,
     ACTION,
     THOUGHT,
-    NARRATION
+    NARRATION,
+    TRANSMISSION
 }

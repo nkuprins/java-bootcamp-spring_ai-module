@@ -2,11 +2,14 @@ package com.accenture.springai_bootcamp_demo.voyage.controller;
 
 import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.SendTransmissionRequest;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipEventRequest;
 import com.accenture.springai_bootcamp_demo.voyage.dto.ShipUpdateDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.TransmissionDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.VoyageDto;
 import com.accenture.springai_bootcamp_demo.voyage.service.MemoryService;
 import com.accenture.springai_bootcamp_demo.voyage.service.ShipSimulation;
+import com.accenture.springai_bootcamp_demo.voyage.service.TransmissionService;
 import com.accenture.springai_bootcamp_demo.voyage.service.VoyageService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -32,6 +35,7 @@ public class VoyageController {
     private final VoyageService voyageService;
     private final ShipSimulation shipSimulation;
     private final MemoryService memoryService;
+    private final TransmissionService transmissionService;
 
     @PostMapping
     public ResponseEntity<VoyageDto> create() {
@@ -67,5 +71,18 @@ public class VoyageController {
                                     @RequestParam(required = false) String query,
                                     @RequestParam(defaultValue = "5") int limit) {
         return memoryService.getMemories(voyageId, crewMemberId, query, limit);
+    }
+
+    @PostMapping("/{voyageId}/transmissions")
+    public ResponseEntity<TransmissionDto> sendTransmission(@PathVariable String voyageId,
+                                                            @Valid @RequestBody SendTransmissionRequest request) {
+        TransmissionDto transmission = transmissionService.send(voyageId, request.message());
+        return ResponseEntity.created(URI.create("/api/voyages/" + voyageId + "/transmissions/" + transmission.id()))
+                .body(transmission);
+    }
+
+    @GetMapping("/{voyageId}/transmissions")
+    public List<TransmissionDto> transmissions(@PathVariable String voyageId) {
+        return transmissionService.getTransmissions(voyageId);
     }
 }

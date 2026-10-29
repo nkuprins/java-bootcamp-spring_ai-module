@@ -4,8 +4,9 @@ import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 
 record CrewIdentity(Long id, String name, String role, String persona) {
 
-    // Must match the captain's role in voyage.yaml
+    // Must match the roles in voyage.yaml
     private static final String CAPTAIN_ROLE = "Captain";
+    private static final String COMMS_OFFICER_ROLE = "Communications officer";
 
     static CrewIdentity of(CrewMember member) {
         return new CrewIdentity(member.getId(), member.getName(), member.getRole(), member.getPersona());
@@ -13,5 +14,9 @@ record CrewIdentity(Long id, String name, String role, String persona) {
 
     boolean isCaptain() {
         return CAPTAIN_ROLE.equals(role);
+    }
+
+    boolean isCommsOfficer() {
+        return COMMS_OFFICER_ROLE.equals(role);
     }
 }

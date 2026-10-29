@@ -61,7 +61,7 @@ final class CrewActionEffects {
         List<String> names = listeners.stream().map(CrewMember::getName).toList();
 
         List<MemoryDraft> memories = Stream.concat(
-                Stream.of(memory(voyage, speaker, MemoryKind.CONVERSATION,
+                Stream.of(memory(voyage, speaker, MemoryKind.SPOKE,
                         "I said to %s in %s: \"%s\"".formatted(String.join(", ", names), room, message))),
                 listeners.stream().map(listener -> memory(voyage, listener, MemoryKind.CONVERSATION,
                         "%s said to me in %s: \"%s\"".formatted(speaker.getName(), room, message))))
@@ -73,7 +73,7 @@ final class CrewActionEffects {
 
     private static ShipChange announce(Voyage voyage, CrewMember captain, String message) {
         List<MemoryDraft> memories = Stream.concat(
-                Stream.of(memory(voyage, captain, MemoryKind.ANNOUNCEMENT,
+                Stream.of(memory(voyage, captain, MemoryKind.SPOKE,
                         "I announced to the whole crew over the intercom: \"%s\"".formatted(message))),
                 voyage.getCrew().stream()
                         .filter(other -> other != captain)

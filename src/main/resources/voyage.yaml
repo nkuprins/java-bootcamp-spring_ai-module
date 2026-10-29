@@ -36,6 +36,8 @@ voyage:
         You are Lev Petrov, 37, the communications officer and the only person who reads
         the delayed messages from Earth. You are lonely and romantic about Earth, a world
         you have only seen in old recordings, and you treat every message as precious.
+        It is your duty to report Earth's messages to the captain in person, though you
+        choose how and when.
     - name: Juno
       role: Born on board
       location: MESS_HALL

@@ -10,9 +10,11 @@ import com.accenture.springai_bootcamp_demo.voyage.entity.LogEntry;
 import com.accenture.springai_bootcamp_demo.voyage.entity.LogKind;
 import com.accenture.springai_bootcamp_demo.voyage.entity.MemoryKind;
 import com.accenture.springai_bootcamp_demo.voyage.entity.ShipEvent;
+import com.accenture.springai_bootcamp_demo.voyage.entity.Transmission;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Voyage;
 import com.accenture.springai_bootcamp_demo.voyage.mapper.VoyageMapper;
 import com.accenture.springai_bootcamp_demo.voyage.repository.LogEntryRepository;
+import com.accenture.springai_bootcamp_demo.voyage.repository.TransmissionRepository;
 import com.accenture.springai_bootcamp_demo.voyage.repository.VoyageRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ShipSimulation {
     private final VoyageRepository voyageRepository;
     private final LogEntryRepository logEntryRepository;
+    private final TransmissionRepository transmissionRepository;
     private final MemoryService memoryService;
     private final CrewAgent crewAgent;
     private final Reflector reflector;
@@ -141,8 +144,25 @@ public class ShipSimulation {
         if (voyage.isLost()) {
             entries.add(LogEntry.of(voyage, LogKind.STATUS, "Oxygen is gone. The Long Voyage is lost."));
             log.info("Voyage {} lost on turn {}", voyage.getId(), voyage.getTurn());
+            return new ShipChange(entries, List.of());
         }
-        return new ShipChange(entries, List.of());
+
+        // Delivered before anyone acts, so the comms officer can react to it this very turn
+        Optional<CrewMember> commsOfficer = voyage.getCrew().stream()
+                .filter(member -> CrewIdentity.of(member).isCommsOfficer())
+                .findFirst();
+        List<MemoryDraft> memories = new ArrayList<>();
+        for (Transmission transmission : transmissionRepository
+                .findByVoyageIdAndDeliveredFalseAndArrivalTurnLessThanEqual(voyage.getId(), voyage.getTurn())) {
+            transmission.markDelivered();
+            // The log only notes the arrival: what it says is known to the comms officer alone
+            entries.add(LogEntry.of(voyage, LogKind.TRANSMISSION, "A transmission from Earth arrived at the comms array."));
+            commsOfficer.map(officer -> new MemoryDraft(officer.getId(), voyage.getTurn(), MemoryKind.EARTH_MESSAGE,
+                            "A transmission from Earth reached me at the comms array. It said: \"%s\""
+                                    .formatted(transmission.getMessage())))
+                    .ifPresent(memories::add);
+        }
+        return new ShipChange(entries, memories);
     }
 
     private <T> T whileBusy(String voyageId, Supplier<T> work) {

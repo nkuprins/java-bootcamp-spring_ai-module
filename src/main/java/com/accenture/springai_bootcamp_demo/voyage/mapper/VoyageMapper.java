@@ -4,10 +4,12 @@ import com.accenture.springai_bootcamp_demo.voyage.dto.CrewMemberDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.LogEntryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryScoreDto;
+import com.accenture.springai_bootcamp_demo.voyage.dto.TransmissionDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.VoyageDto;
 import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 import com.accenture.springai_bootcamp_demo.voyage.entity.LogEntry;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Memory;
+import com.accenture.springai_bootcamp_demo.voyage.entity.Transmission;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Voyage;
 import java.util.List;
 import org.mapstruct.Mapper;
@@ -25,4 +27,7 @@ public interface VoyageMapper {
     MemoryDto toDto(Memory memory);
     MemoryDto toDto(Memory memory, MemoryScoreDto score);
     List<MemoryDto> toMemoryDtos(List<Memory> memories);
+
+    TransmissionDto toDto(Transmission transmission);
+    List<TransmissionDto> toTransmissionDtos(List<Transmission> transmissions);
 }

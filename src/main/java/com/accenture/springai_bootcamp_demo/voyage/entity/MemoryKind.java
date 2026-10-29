@@ -8,11 +8,13 @@ package com.accenture.springai_bootcamp_demo.voyage.entity;
 public enum MemoryKind {
     ROUTINE(2),
     ACTION(3),
+    SPOKE(3),
     ALARM(4),
     CONVERSATION(5),
     ANNOUNCEMENT(6),
     REFLECTION(7),
-    WITNESSED(8);
+    WITNESSED(8),
+    EARTH_MESSAGE(9);
 
     private final int importance;
 
