@@ -33,7 +33,7 @@ Taken after letting a voyage run for 20 hours with a hull breach, a crop blight 
 | Requirement | Where |
 |---|---|
 | Ollama installed and running | `llama3.2` for chat, `nomic-embed-text` for embeddings |
-| Message endpoint answers from a local model | `POST /api/chats/{id}/chatMessages`, via `client/OpenRouterClient` |
+| Message endpoint answers from a local model | `POST /api/chats/{id}/chatMessages`, via `client/ChatModelClient` |
 | Own use case with own endpoints | The Long Voyage, `/api/voyages/...` (see [API](#api)) |
 | Logic components | Ship rules in `Voyage`, memory scoring in `MemoryRanking`, action rules in `CrewActionEffects` |
 | Tools | Crew members act only by calling `@Tool` methods in `CrewTools` |
@@ -74,7 +74,7 @@ Everything has a default, so no `.env` is needed. To override, set environment v
 | `OLLAMA_MODEL` | `llama3.2` | Chat model, used by every agent |
 | `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embeddings for crew memories |
 | `SQLITE_DB_PATH` | `chatbot.db` | SQLite database file |
-| `OPENROUTER_SYSTEM_PROMPT` | "You are a helpful, concise assistant." | System prompt of the chat |
+| `CHAT_SYSTEM_PROMPT` | "You are a helpful, concise assistant." | System prompt of the chat |
 
 The crew (names, roles, personalities, starting rooms) is configured in `src/main/resources/voyage.yaml`. Changes there apply to voyages started afterwards, because each voyage keeps its own copy of the crew.
 
@@ -125,9 +125,9 @@ The voyage id is kept in the URL (`#...`) and in the browser, so a reload keeps 
 | `POST /api/voyages/{id}/transmissions` | `{"message": "..."}`, arrives after 4 hours |
 | `GET /api/voyages/{id}/transmissions` | Sent messages and whether they arrived |
 | `POST /api/voyages/{id}/crew/{crewId}/interview` | `{"question": "..."}`, answered in character |
-| `GET /api/voyages/{id}/crew/{crewId}/memories?query=...&limit=5` | What someone remembers. With `query`: ranked, with the score behind each memory |
+| `GET /api/voyages/{id}/crew/{crewId}/memories?query=...&limit=5` | What someone remembers. With `query`: ranked, with the score behind each memory (`limit` 1–50) |
 
-Errors come back as RFC 7807 problem details: 400 for invalid input, 404 for an unknown voyage or crew member, 409 for a lost voyage or a turn or event that is already running, 502 when the model fails during an interview. A body that is not valid JSON, or names an unknown event or room, also gets a 400, but in Spring Boot's default error format.
+Errors come back as RFC 7807 problem details: 400 for invalid input (including a body that is not valid JSON or names an unknown event or room), 404 for an unknown voyage or crew member, 409 for a lost voyage or a turn or event that is already running, and 502 when Ollama fails during a turn, an event, an interview or a memory search. A turn or event that fails halfway is undone, so the voyage stays where it was before the call.
 
 ### MCP server
 
@@ -145,7 +145,7 @@ Choose the Streamable HTTP transport, enter `http://localhost:8080/mcp`, connect
 
 ```
 com.accenture.springai_bootcamp_demo
-├── client/              OpenRouterClient: the chat's ChatClient call (assignment TODOs)
+├── client/              ChatModelClient: the chat's ChatClient call (assignment TODOs)
 ├── controller/ service/ entity/ dto/ mapper/ repository/ config/
 │                        the chat, as provided by the course
 └── voyage/              The Long Voyage
@@ -166,6 +166,8 @@ com.accenture.springai_bootcamp_demo
 ```
 
 Frontend: plain HTML, CSS and JavaScript in `src/main/resources/static` (`voyage.html`, `voyage.css`, `voyage.js`), no build step.
+
+Prompts: one template per prompt in `src/main/resources/prompts` (`*.st`, placeholders like `{turn}`), so they can be changed without touching Java.
 
 ## Known limitations
 

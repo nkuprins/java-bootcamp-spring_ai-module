@@ -21,6 +21,12 @@ spring:
         model: ${OLLAMA_MODEL:llama3.2}
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+    # The default is 10 retries with 2s x5 backoff: minutes of waiting when local Ollama is down, where retrying
+    # rarely helps. max-attempts counts retries after the first call. Only chat calls retry, embeddings never do
+    retry:
+      max-attempts: 1
+      backoff:
+        initial-interval: 1s
     mcp:
       server:
         name: long-voyage-mission-control

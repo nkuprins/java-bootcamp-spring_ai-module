@@ -8,21 +8,26 @@ import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Location;
 import com.accenture.springai_bootcamp_demo.voyage.entity.LogEntry;
 import com.accenture.springai_bootcamp_demo.voyage.entity.LogKind;
+import com.accenture.springai_bootcamp_demo.voyage.entity.Memory;
 import com.accenture.springai_bootcamp_demo.voyage.entity.MemoryKind;
 import com.accenture.springai_bootcamp_demo.voyage.entity.ShipEvent;
+import com.accenture.springai_bootcamp_demo.voyage.entity.ShipStatus;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Transmission;
 import com.accenture.springai_bootcamp_demo.voyage.entity.Voyage;
 import com.accenture.springai_bootcamp_demo.voyage.mapper.VoyageMapper;
 import com.accenture.springai_bootcamp_demo.voyage.repository.LogEntryRepository;
+import com.accenture.springai_bootcamp_demo.voyage.repository.MemoryRepository;
 import com.accenture.springai_bootcamp_demo.voyage.repository.TransmissionRepository;
 import com.accenture.springai_bootcamp_demo.voyage.repository.VoyageRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +38,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * hand with {@link TransactionTemplate} so the busy guard wraps the commit, and
  * so model calls (crew decisions, embeddings) run between short transactions
  * instead of inside one long one (SQLite allows only one writer at a time).
+ * Because a turn is many transactions, a turn or event that fails halfway is
+ * undone from a checkpoint taken before it started.
  */
 @Slf4j
 @Service
@@ -40,6 +47,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ShipSimulation {
     private final VoyageRepository voyageRepository;
     private final LogEntryRepository logEntryRepository;
+    private final MemoryRepository memoryRepository;
     private final TransmissionRepository transmissionRepository;
     private final MemoryService memoryService;
     private final CrewAgent crewAgent;
@@ -55,6 +63,14 @@ public class ShipSimulation {
     private final Set<String> busyVoyages = ConcurrentHashMap.newKeySet();
 
     private record Outcome(ShipUpdateDto update, List<MemoryDraft> memories) {
+    }
+
+    // Everything a turn or event can change; log entries and memories are only added, so their last ids are enough
+    private record Checkpoint(int turn, ShipStatus ship, Map<Long, CrewState> crew, long lastLogEntryId,
+                              long lastMemoryId) {
+    }
+
+    private record CrewState(Location location, String lastWords) {
     }
 
     public ShipUpdateDto runTurn(String voyageId) {
@@ -170,9 +186,48 @@ public class ShipSimulation {
             throw new VoyageStateException("Voyage " + voyageId + " is busy with another turn or event");
         }
         try {
-            return work.get();
+            Checkpoint checkpoint = transactionTemplate.execute(status -> checkpoint(loadActiveVoyage(voyageId)));
+            try {
+                return work.get();
+            } catch (RuntimeException ex) {
+                undo(voyageId, checkpoint, ex);
+                throw ex;
+            }
         } finally {
             busyVoyages.remove(voyageId);
+        }
+    }
+
+    private Checkpoint checkpoint(Voyage voyage) {
+        Map<Long, CrewState> crew = voyage.getCrew().stream().collect(Collectors.toMap(
+                CrewMember::getId, member -> new CrewState(member.getLocation(), member.getLastWords())));
+        long lastLogEntryId = logEntryRepository.findTopByVoyageIdOrderByIdDesc(voyage.getId())
+                .map(LogEntry::getId).orElse(0L);
+        long lastMemoryId = memoryRepository.findTopByCrewMemberVoyageIdOrderByIdDesc(voyage.getId())
+                .map(Memory::getId).orElse(0L);
+        return new Checkpoint(voyage.getTurn(), voyage.status(), crew, lastLogEntryId, lastMemoryId);
+    }
+
+    private void undo(String voyageId, Checkpoint checkpoint, RuntimeException failure) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                Voyage voyage = voyageRepository.findWithCrewById(voyageId).orElseThrow();
+                voyage.restore(checkpoint.turn(), checkpoint.ship());
+                for (CrewMember member : voyage.getCrew()) {
+                    CrewState state = checkpoint.crew().get(member.getId());
+                    member.setLocation(state.location());
+                    member.setLastWords(state.lastWords());
+                }
+                logEntryRepository.deleteByVoyageIdAndIdGreaterThan(voyageId, checkpoint.lastLogEntryId());
+                memoryRepository.deleteByCrewMemberVoyageIdAndIdGreaterThan(voyageId, checkpoint.lastMemoryId());
+                // Everything due by the checkpoint's turn was delivered back then, so later deliveries are undone
+                transmissionRepository.findByVoyageIdAndDeliveredTrueAndArrivalTurnGreaterThan(voyageId, checkpoint.turn())
+                        .forEach(Transmission::markUndelivered);
+            });
+            log.warn("Undid a failed turn or event of voyage {}, back to turn {}", voyageId, checkpoint.turn());
+        } catch (RuntimeException undoFailure) {
+            log.error("Could not undo a failed turn or event of voyage {}", voyageId, undoFailure);
+            failure.addSuppressed(undoFailure);
         }
     }
 

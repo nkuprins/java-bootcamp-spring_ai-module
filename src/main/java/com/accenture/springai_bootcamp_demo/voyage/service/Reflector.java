@@ -2,8 +2,11 @@ package com.accenture.springai_bootcamp_demo.voyage.service;
 
 import com.accenture.springai_bootcamp_demo.voyage.repository.MemoryRepository;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,17 +21,11 @@ class Reflector {
 
     private static final int MAX_INSIGHTS = 2;
 
-    private static final String INSTRUCTIONS = """
-            You are thinking quietly to yourself aboard the generation ship Long Voyage.
-            Your recent memories, oldest first:
-            %s
+    // Small models sometimes answer with broken JSON or no insights; told what went wrong, they usually manage
+    private static final int ATTEMPTS = 2;
 
-            The ship right now: %s (each out of 100).
-
-            What do you now believe, suspect or feel about the people, the ship or your situation?
-            Give one or two short insights in the first person, each one sentence.
-            Only conclusions that follow from these memories and the ship's state; nothing else.
-            """;
+    private static final PromptTemplate INSTRUCTIONS = new PromptTemplate(new ClassPathResource("prompts/reflection.st"));
+    private static final PromptTemplate RETRY = new PromptTemplate(new ClassPathResource("prompts/reflection-retry.st"));
 
     // Structured output target: Ollama is given this shape as a JSON schema and must answer in it
     record Reflection(List<String> insights) {
@@ -51,24 +48,41 @@ class Reflector {
         if (memories.isEmpty()) {
             return List.of();
         }
-        try {
-            Reflection reflection = chatClient.prompt()
-                    .system(situation.who().persona())
-                    .user(INSTRUCTIONS.formatted(String.join("\n", memories), situation.ship().summary()))
-                    .call()
-                    .entity(Reflection.class, ChatClient.EntityParamSpec::useProviderStructuredOutput);
-            if (reflection == null || reflection.insights() == null) {
-                return List.of();
+        String instructions = INSTRUCTIONS.render(Map.of(
+                "memories", String.join("\n", memories),
+                "ship", situation.ship().summary()));
+        String prompt = instructions;
+        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
+            String problem;
+            try {
+                List<String> insights = insightsOf(chatClient.prompt()
+                        .system(situation.who().persona())
+                        .user(prompt)
+                        .call()
+                        .entity(Reflection.class, ChatClient.EntityParamSpec::useProviderStructuredOutput));
+                if (!insights.isEmpty()) {
+                    return insights;
+                }
+                problem = "it contained no insights";
+            } catch (RuntimeException ex) {
+                log.warn("{} could not reflect on turn {} (attempt {})", situation.who().name(), situation.turn(),
+                        attempt, ex);
+                problem = "it could not be read as JSON";
             }
-            return reflection.insights().stream()
-                    .filter(insight -> insight != null && !insight.isBlank())
-                    .map(insight -> insight.replaceAll("\\s+", " ").strip())
-                    .limit(MAX_INSIGHTS)
-                    .toList();
-        } catch (RuntimeException ex) {
-            // A missed reflection only means this person keeps their old opinions a while longer
-            log.warn("{} could not reflect on turn {}", situation.who().name(), situation.turn(), ex);
+            prompt = instructions + "\n" + RETRY.render(Map.of("problem", problem));
+        }
+        // A missed reflection only means this person keeps their old opinions a while longer
+        return List.of();
+    }
+
+    private static List<String> insightsOf(Reflection reflection) {
+        if (reflection == null || reflection.insights() == null) {
             return List.of();
         }
+        return reflection.insights().stream()
+                .filter(insight -> insight != null && !insight.isBlank())
+                .map(insight -> insight.replaceAll("\\s+", " ").strip())
+                .limit(MAX_INSIGHTS)
+                .toList();
     }
 }

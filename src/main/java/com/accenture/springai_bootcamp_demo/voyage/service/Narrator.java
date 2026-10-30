@@ -1,9 +1,12 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,14 +18,7 @@ import org.springframework.stereotype.Component;
 @Component
 class Narrator {
 
-    private static final String INSTRUCTIONS = """
-            You keep the official log of the generation ship Long Voyage.
-            Everything that happened in hour %d:
-            %s
-
-            Write the log entry for this hour: at most two sentences and 40 words, past tense, calm and a little dramatic.
-            Start with "Hour %d:". Mention only what is listed above; never invent events, people or numbers.
-            """;
+    private static final PromptTemplate INSTRUCTIONS = new PromptTemplate(new ClassPathResource("prompts/narration.st"));
 
     private final ChatClient chatClient;
 
@@ -33,7 +29,7 @@ class Narrator {
     Optional<String> narrate(int turn, List<String> happenings) {
         try {
             String entry = chatClient.prompt()
-                    .user(INSTRUCTIONS.formatted(turn, String.join("\n", happenings), turn))
+                    .user(INSTRUCTIONS.render(Map.of("turn", turn, "happenings", String.join("\n", happenings))))
                     .call()
                     .content();
             // One log line: models sometimes break their answer over several lines

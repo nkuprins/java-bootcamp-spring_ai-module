@@ -1,7 +1,10 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
-import com.accenture.springai_bootcamp_demo.client.OpenRouterException;
+import com.accenture.springai_bootcamp_demo.client.ModelServerException;
+import java.util.Map;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -13,20 +16,9 @@ import org.springframework.util.StringUtils;
 @Component
 class Interviewer {
 
-    private static final String RULES = """
-            Mission Control on Earth is speaking with you over a private channel; nobody else on board can hear.
-            Answer in character, in one to three sentences, only from what you know and remember.
-            You may evade, refuse or lie if your character would.
-            """;
-
-    private static final String SITUATION = """
-            Turn %d. You are in %s. %s
-            Ship status: %s (each out of 100).
-
-            %s
-
-            Mission Control asks: "%s"
-            """;
+    private static final String RULES = new PromptTemplate(new ClassPathResource("prompts/interview-rules.st")).render();
+    private static final PromptTemplate SITUATION =
+            new PromptTemplate(new ClassPathResource("prompts/interview-situation.st"));
 
     private final ChatClient chatClient;
     private final MemoryService memoryService;
@@ -43,15 +35,20 @@ class Interviewer {
         try {
             answer = chatClient.prompt()
                     .system(situation.who().persona() + "\n\n" + RULES)
-                    .user(SITUATION.formatted(situation.turn(), situation.location().label(), situation.company(),
-                            situation.ship().summary(), mind, question))
+                    .user(SITUATION.render(Map.of(
+                            "turn", situation.turn(),
+                            "room", situation.location().label(),
+                            "company", situation.company(),
+                            "ship", situation.ship().summary(),
+                            "mind", mind,
+                            "question", question)))
                     .call()
                     .content();
         } catch (RuntimeException ex) {
-            throw new OpenRouterException("The model could not answer as " + situation.who().name(), ex);
+            throw new ModelServerException("The model could not answer as " + situation.who().name(), ex);
         }
         if (!StringUtils.hasText(answer)) {
-            throw new OpenRouterException(situation.who().name() + " gave no answer");
+            throw new ModelServerException(situation.who().name() + " gave no answer");
         }
         return answer.replaceAll("\\s+", " ").strip();
     }

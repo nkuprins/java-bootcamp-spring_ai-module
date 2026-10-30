@@ -2,6 +2,7 @@ package com.accenture.springai_bootcamp_demo.voyage.repository;
 
 import com.accenture.springai_bootcamp_demo.voyage.entity.Memory;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MemoryRepository extends JpaRepository<Memory, Long> {
@@ -11,4 +12,8 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
     List<Memory> findByCrewMemberIdOrderByIdDesc(Long crewMemberId);
 
     List<Memory> findTop12ByCrewMemberIdOrderByIdDesc(Long crewMemberId);
+
+    Optional<Memory> findTopByCrewMemberVoyageIdOrderByIdDesc(String voyageId);
+
+    void deleteByCrewMemberVoyageIdAndIdGreaterThan(String voyageId, Long id);
 }

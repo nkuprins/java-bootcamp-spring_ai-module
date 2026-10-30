@@ -1,5 +1,6 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
+import com.accenture.springai_bootcamp_demo.client.ModelServerException;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryDto;
 import com.accenture.springai_bootcamp_demo.voyage.dto.MemoryScoreDto;
 import com.accenture.springai_bootcamp_demo.voyage.entity.CrewMember;
@@ -43,8 +44,7 @@ public class MemoryService {
         if (drafts.isEmpty()) {
             return;
         }
-        List<float[]> embeddings = embeddingModel.embed(
-                drafts.stream().map(draft -> DOCUMENT_PREFIX + draft.content()).toList());
+        List<float[]> embeddings = embed(drafts.stream().map(draft -> DOCUMENT_PREFIX + draft.content()).toList());
 
         transactionTemplate.executeWithoutResult(status -> {
             List<Memory> memories = new ArrayList<>();
@@ -96,8 +96,17 @@ public class MemoryService {
     }
 
     List<ScoredMemory> recall(Long crewMemberId, String situation, int currentTurn, int limit) {
-        float[] query = embeddingModel.embed(QUERY_PREFIX + situation);
+        float[] query = embed(List.of(QUERY_PREFIX + situation)).getFirst();
         return MemoryRanking.rank(memoryRepository.findByCrewMemberId(crewMemberId), query, currentTurn, limit);
+    }
+
+    // Unlike a missed chat answer this is never skipped: without embeddings nothing can be remembered or recalled
+    private List<float[]> embed(List<String> texts) {
+        try {
+            return embeddingModel.embed(texts);
+        } catch (RuntimeException ex) {
+            throw new ModelServerException("The embedding model failed: " + ex.getMessage(), ex);
+        }
     }
 
     public List<MemoryDto> getMemories(String voyageId, Long crewMemberId, String query, int limit) {

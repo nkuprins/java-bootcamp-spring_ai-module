@@ -110,6 +110,15 @@ public class Voyage {
         }
     }
 
+    // Puts the ship back to an earlier moment, when a turn or event that changed it failed halfway
+    public void restore(int turn, ShipStatus status) {
+        this.turn = turn;
+        oxygen = status.oxygen();
+        power = status.power();
+        hull = status.hull();
+        food = status.food();
+    }
+
     public boolean isLost() {
         return oxygen == MIN_LEVEL;
     }

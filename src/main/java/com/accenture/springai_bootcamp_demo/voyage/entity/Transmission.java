@@ -58,4 +58,8 @@ public class Transmission {
     public void markDelivered() {
         this.delivered = true;
     }
+
+    public void markUndelivered() {
+        this.delivered = false;
+    }
 }

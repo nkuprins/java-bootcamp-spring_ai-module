@@ -9,4 +9,6 @@ public interface TransmissionRepository extends JpaRepository<Transmission, Long
     List<Transmission> findByVoyageIdOrderByIdAsc(String voyageId);
 
     List<Transmission> findByVoyageIdAndDeliveredFalseAndArrivalTurnLessThanEqual(String voyageId, int turn);
+
+    List<Transmission> findByVoyageIdAndDeliveredTrueAndArrivalTurnGreaterThan(String voyageId, int turn);
 }

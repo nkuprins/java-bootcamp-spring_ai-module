@@ -1,8 +1,11 @@
 package com.accenture.springai_bootcamp_demo.voyage.service;
 
+import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,33 +17,14 @@ import org.springframework.stereotype.Component;
 @Component
 class CrewAgent {
 
-    private static final String RULES = """
-            You live aboard the generation ship Long Voyage, decades away from any planet.
-            Every turn is one hour. Each turn you take exactly one action by calling one tool:
-            moveTo, say, announce, repair or rest. Never describe a tool call in text: call it.
-            Stay in character: act on what you know and feel. Keep anything you say to one or two sentences.
-            Never repeat what you or others already said; react to what is new, or do something instead of talking.
-            """;
-
-    private static final String REMINDER = """
-            You have not acted yet this hour. %s
-            Call exactly one tool now: moveTo, say, announce, repair or rest.
-            """;
+    private static final String RULES = new PromptTemplate(new ClassPathResource("prompts/crew-rules.st")).render();
+    private static final PromptTemplate REMINDER = new PromptTemplate(new ClassPathResource("prompts/crew-reminder.st"));
 
     // Small models often answer in text or give up after a refused tool call, so they get one reminder
     private static final int ATTEMPTS = 2;
 
-    private static final String SITUATION = """
-            Turn %d. You are in %s. %s
-            %s
-            Ship status: %s (each out of 100).
-            A hull below 50 leaks oxygen, power below 30 weakens the air scrubbers, and at oxygen 0 everyone dies.
-            Hull and power are repaired in engineering; food and oxygen in the hydroponics bay.
-
-            %s
-
-            What do you do this hour? Call one tool.
-            """;
+    private static final PromptTemplate SITUATION =
+            new PromptTemplate(new ClassPathResource("prompts/crew-situation.st"));
 
     private final ChatClient chatClient;
     private final MemoryService memoryService;
@@ -56,7 +40,8 @@ class CrewAgent {
         for (int attempt = 1; attempt <= ATTEMPTS && tools.chosenAction().isEmpty(); attempt++) {
             if (attempt > 1) {
                 prompt.append('\n')
-                        .append(REMINDER.formatted(tools.lastRefusal().map(r -> "Last time: " + r).orElse("")));
+                        .append(REMINDER.render(Map.of(
+                                "lastRefusal", tools.lastRefusal().map(r -> "Last time: " + r).orElse(""))));
             }
             ask(situation, prompt.toString(), tools);
         }
@@ -88,7 +73,12 @@ class CrewAgent {
                 : "The last thing you said was: \"" + situation.lastWords() + "\"";
         String now = "In %s. %s Ship: %s.".formatted(
                 situation.location().label(), situation.company(), situation.ship().summary());
-        return SITUATION.formatted(situation.turn(), situation.location().label(), situation.company(), lastWords,
-                situation.ship().summary(), memoryService.describeMind(situation.who().id(), now, situation.turn()));
+        return SITUATION.render(Map.of(
+                "turn", situation.turn(),
+                "room", situation.location().label(),
+                "company", situation.company(),
+                "lastWords", lastWords,
+                "ship", situation.ship().summary(),
+                "mind", memoryService.describeMind(situation.who().id(), now, situation.turn())));
     }
 }

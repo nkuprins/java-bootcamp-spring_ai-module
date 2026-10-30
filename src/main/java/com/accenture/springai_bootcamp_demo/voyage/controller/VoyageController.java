@@ -15,6 +15,8 @@ import com.accenture.springai_bootcamp_demo.voyage.service.ShipSimulation;
 import com.accenture.springai_bootcamp_demo.voyage.service.TransmissionService;
 import com.accenture.springai_bootcamp_demo.voyage.service.VoyageService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -73,7 +75,7 @@ public class VoyageController {
     public List<MemoryDto> memories(@PathVariable String voyageId,
                                     @PathVariable Long crewMemberId,
                                     @RequestParam(required = false) String query,
-                                    @RequestParam(defaultValue = "5") int limit) {
+                                    @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit) {
         return memoryService.getMemories(voyageId, crewMemberId, query, limit);
     }
 
